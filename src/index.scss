@@ -1,0 +1,27 @@
+
+/*
+ This is an example file that will work with all the default settings.
+*/
+
+.auto-size-text-container {
+    display: grid;              /* Must be grid, flex, inline-grid, inline-flex, block flex, etc. */
+    justify-content: center;    /* Matches the default transform-origin: center. */
+    align-items: start;         /* Must not be stretch, the default. Center could also work but doesn't look very good for multiline text */
+    width: 100%;                /* The container must be the maximum size the text is allowed to be, so generally width and height are 100% */
+    height: 100%;               /* ^^^ and also because if there's no width/height, we'll often just shrink down to the size of the child we're trying to measure against, which is unhelpful */
+    padding: 0em;               /* Though padding and margin can make width and height 100 act weird, so adjust to each case. */
+    margin: 0em;
+}
+
+.auto-size-text-adjust {
+    // These custom properties control how changes in the scale
+    // affect the text.
+    // --text-adjust-scale-y must affect the text in a way that
+    // causes a potential reflow, as scrollHeight is the
+    // standard for measure.
+    transform: scaleX(calc(var(--text-adjust-scale-x, 1) * 100%));
+    font-size: calc(var(--text-adjust-scale-y, 1) * 1em);
+
+    padding: 0.25em;      /* Padding is fine */
+    margin: 0em;          /* Margin is not */
+}

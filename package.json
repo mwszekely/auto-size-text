@@ -1,0 +1,53 @@
+{
+  "name": "auto-size-text",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "",
+  "source": "/src/index.tsx",
+  "module": "/dist/index.js",
+  "types": "/dist/index.d.ts",
+  "packageManager": "pnpm@7.30.0",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "browser": "./dist/index.js",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "npx npm-run-all --npm-path npm -sc build:sass build:ts build:demo",
+    "watch": "npx npm-run-all --npm-path npm -pc watch:*",
+    "watch:sass": "sass --watch ./src/index.scss:./dist/index.css",
+    "watch:ts": "tsc --watch",
+    "build:sass": "sass ./src/index.scss:./dist/index.css",
+    "build:ts": "tsc --build",
+    "build:demo": "npx rollup -c ./rollup.config.js",
+    "watch:demo": "npx rollup -c ./rollup.config.js --watch --no-watch.clearScreen",
+    "test": "jest",
+    "clean": "tsc --build --clean",
+    "rebuild": "rm \"./pnpm-lock.yaml\" && rm -R \"./node_modules\" && pnpm install && pnpm run build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@rollup/plugin-babel": "^6.0.3",
+    "async-to-sync": "github:mwszekely/async-to-sync",
+    "tslib": "^2.5.0",
+    "typescript": "^5.0.4"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.21.5",
+    "@babel/preset-env": "^7.21.4",
+    "@rollup/plugin-commonjs": "^24.1.0",
+    "@rollup/plugin-node-resolve": "^15.0.2",
+    "@rollup/plugin-replace": "^5.0.2",
+    "@rollup/plugin-typescript": "^11.1.0",
+    "npm-run-all": "^4.1.5",
+    "rollup": "^3.21.0",
+    "rollup-plugin-sourcemaps": "^0.6.3",
+    "sass": "^1.62.1",
+    "serve": "^14.2.0"
+  }
+}
