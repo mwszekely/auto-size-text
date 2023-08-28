@@ -46,7 +46,7 @@ export function autoResizeToFit({ containerElement, textElement, ...rest }: Omit
     let resizeObserver = new ResizeObserver(handler);
     let mutationObserver = new MutationObserver(handler);
 
-    resizeObserver.observe(containerElement, { box: "device-pixel-content-box" });
+    resizeObserver.observe(containerElement, { box: "content-box" });
     mutationObserver.observe(containerElement, { attributes: true, childList: true })
 
     // We don't need to wait for this to complete
