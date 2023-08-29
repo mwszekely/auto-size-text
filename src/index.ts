@@ -1,46 +1,77 @@
 import { asyncToSync } from "async-to-sync";
 
 export interface ResizeToFitOptions {
-    /** The width of the container, as measured by `element.getBoundingClientRect().width` */
-    containerWidth: number;
-    /** The height of the container, as measured by element.scrollHeight */
-    containerHeight: number;
 
-    /** The element to resize */
+    /**
+     * The element the resized text must fit within.
+     * 
+     * This element should be styled in such a way that it **does not change** relative to the contents of its children,
+     * only relative to its parents. Generally this means `width: 100%`, and don't forget `white-space: nowrap` as
+     * appropriate.
+     */
+    containerElement: HTMLElement;
+
+    /** 
+     * The element to resize. It will be measured and compared to the container element. 
+     */
     textElement: HTMLElement;
 
-    maxStretchX?: number;
-    minSquishX?: number;
-    maxStretchY?: number;
-    minSquishY?: number;
-    /** Measured in pixels (as in `getClientBoundingRect`) */
-    tolerance?: number;
+    /** Must be >= 1; this is the widest the text is allowed to stretch to fill the available space */
+    maxStretchInline?: number;
+    /** Must be > 0 and <= 1; this is the narrowest the text is allowed to squish to fill the available space */
+    minSquishInline?: number;
+    /** Must be >= 1; this is the tallest the text is allowed to stretch to fill the available space */
+    maxStretchBlock?: number;
+    /** Must be > 0 and <= 1; this is the shortest the text is allowed to squish to fill the available space */
+    minSquishBlock?: number;
+    /** 
+     * Measured in pixels (as in `getClientBoundingRect`).
+     * 
+     * Any measurement smaller than this is treated as 0.
+     * 
+     * Set to `Infinity` to disable horizontal resizing.
+     */
+    toleranceInline?: number;
+
+    /**
+     * Measured in pixels (as in `getClientBoundingRect`).
+     * 
+     * Any measurement smaller than this is treated as 0.
+     * 
+     * Set to `Infinity` to disable vertical resizing, which is a significant performance benefit.
+     */
+    toleranceBlock?: number;
 
     /** Failsafe if a value within `tolerance` is never reached */
     maxIterations?: number;
 
     /** 
-     * By default, two CSS properties, `--text-adjust-scale-x` and `--text-adjust-scale-y`, are directly modified on the element.
+     * The resize algorithm will call this when it's time to change the size of the element (either to measure it or to set it to its final value).
+     * 
+     * By default, two CSS properties, `--text-adjust-scale-inline` and `--text-adjust-scale-block`, are directly modified on the element.
      *
-     * If you need to do something else, override that here. 
+     * If you need to do something else (e.g. if you cannot directly modify elements because you're using a UI library), override that here.
+     * 
+     * This is allowed to be `async`, in which case execution is debounced while the `Promise` from the last call to `applyScale` is still unfulfilled.
      */
-    applyScale?: (textElement: HTMLElement, scaleX: number, scaleY: number) => (void | Promise<void>);
+    applyScale: (textElement: HTMLElement, scaleInline: number, scaleBlock: number) => (void | Promise<void>) | null | undefined;
 
     /** 
      * If `iterationMax` is reached, this function is called.
      * 
-     * Useful mostly for debugging if something is wrong.
+     * Useful mostly for debugging if something is wrong; running out of iterations generally shouldn't happen.
+     * 
+     * By default logs to the console; pass `null` to disable this.
      */
-    onRanOutOfIterations?: (which: "x" | "y") => void;
+    onRanOutOfIterations?: (which: "block" | "inline") => void;
 }
 
-export function autoResizeToFit({ containerElement, textElement, ...rest }: Omit<ResizeToFitOptions, "containerWidth" | "containerHeight"> & { containerElement?: HTMLElement }) {
+export function autoResizeToFit({ containerElement, textElement, ...rest }: ResizeToFitOptions) {
     containerElement ??= textElement.parentElement || document.body;
 
     const { syncOutput: handler } = asyncToSync({
         asyncInput: async () => {
-            const { width, height } = containerElement!.getBoundingClientRect();
-            await resizeToFit({ containerWidth: width, containerHeight: containerElement!.offsetHeight, textElement, ...rest })
+            await resizeToFit({ containerElement, textElement, ...rest })
         }
     });
     let resizeObserver = new ResizeObserver(handler);
@@ -51,7 +82,7 @@ export function autoResizeToFit({ containerElement, textElement, ...rest }: Omit
 
     // We don't need to wait for this to complete
     const { width, height } = containerElement.getBoundingClientRect();
-    resizeToFit({ containerWidth: width, containerHeight: containerElement.offsetHeight, textElement, ...rest });
+    resizeToFit({ containerElement, textElement, ...rest });
 
     return () => { resizeObserver.disconnect(); mutationObserver.disconnect(); }
 }
@@ -62,144 +93,162 @@ export function autoResizeToFit({ containerElement, textElement, ...rest }: Omit
  * 
  * @param param0 @see ResizeToFitOptions
  */
-export async function resizeToFit({ applyScale, containerWidth, containerHeight, maxIterations: iterationMax, tolerance, maxStretchX, maxStretchY, minSquishX, minSquishY, textElement, onRanOutOfIterations }: ResizeToFitOptions) {
+export async function resizeToFit({ applyScale, containerElement, maxIterations: iterationMax, toleranceInline, toleranceBlock, maxStretchInline, maxStretchBlock, minSquishInline, minSquishBlock, textElement, onRanOutOfIterations }: ResizeToFitOptions) {
 
-    applyScale ??= async (textElement, scaleX, scaleY) => {
-        textElement.style.setProperty("--text-adjust-scale-x", `${scaleX.toFixed(5)}`);
-        textElement.style.setProperty("--text-adjust-scale-y", `${scaleY.toFixed(5)}`);
+    const writingMode = window.getComputedStyle(containerElement).writingMode;
+    let writingDirection: "horizontal" | "vertical" = writingMode.startsWith("horizontal-") ? "horizontal" :
+        writingMode.startsWith("vertical-") ? "vertical" :
+            writingMode.startsWith("sideways-") ? "vertical" :
+                "vertical"
+
+    if (onRanOutOfIterations === undefined)
+        onRanOutOfIterations = (which: "block" | "inline") => { debugger; console.log(`Exceeded ${iterationMax} attempts to resize the element in the ${which} direction.`) }
+
+    applyScale ??= async (textElement, scaleInline, scaleBlock) => {
+        textElement.style.setProperty("--text-adjust-scale-inline", `${scaleInline.toFixed(5)}`);
+        textElement.style.setProperty("--text-adjust-scale-block", `${scaleBlock.toFixed(5)}`);
     };
-    tolerance ??= 0.001;
 
-    let seenX = new Set();
-    let seenY = new Set();
-    iterationMax ??= 100;
+    const containerSize = containerElement.getBoundingClientRect();
+    const containerSizeInline = (writingDirection == "horizontal"? containerSize.width : containerSize.height);
+    const containerSizeBlock = (writingDirection == "horizontal"? containerSize.height : containerSize.width);
+
+    toleranceInline ??= 0.01;
+    toleranceBlock ??= 0.01;
+
+    iterationMax ??= 20;
     let iterationsLeft = iterationMax;
-    minSquishX ??= 0;
-    maxStretchX ??= 1;
-    minSquishY ??= 0;
-    maxStretchY ??= 100;
+    minSquishInline ??= 0;
+    maxStretchInline ??= 1;
+    minSquishBlock ??= 0;
+    maxStretchBlock ??= 10;
 
-    let foundX = false;
-    let foundY = false;
+    let foundInline = false;
+    let foundBlock = false;
 
-    let currentScaleX = 1;
-    let currentScaleY = 1;
+    let currentScaleInline = 1;
+    let currentScaleBlock = 1;
+
+    let prevScaleInline = Infinity;
+    let prevScaleBlock = Infinity;
     // If we run out of iterations, and the last currentScale we measured was too big,
     // then currentScale wouldn't be an appropriate return value. So until we find
     // a currentScale that's within the tolerance, we keep track of the last one
     // we found that's within the bounds of the container, and return that
     // (again, only if we run out of iterations before reaching tolerance)
-    let fallbackScaleX = null as (null | number);
-    let fallbackScaleY = null as (null | number);
+    let fallbackScaleInline = minSquishInline || 0;
+    let fallbackScaleBlock = minSquishBlock || 0;
 
-    // An old transform might still be applied, so before we start measuring, make sure we reset to 1.
-    await applyScale(textElement, currentScaleX, currentScaleY);
-    forceReflow(textElement);
-
-    while (iterationsLeft >= 0 && !foundY) {
-
-        if (seenY.has(currentScaleY)) {
-            // We're stuck in an infinite loop
-            // so we'll just cut this short right here and now.
-            // (TODO: Optimize the set checks)
-            iterationsLeft = 0;
+    while (iterationsLeft >= 0 && !foundBlock) {
+        if (!isFinite(toleranceBlock)) {
+            fallbackScaleBlock = 1; // Infinity means "do not adjust"; bail out immediately
             break;
         }
-        seenY.add(currentScaleY);
 
-        let textHeight = textElement.scrollHeight || 0;
-        let differenceY = textHeight / containerHeight;
-        if (differenceY > 1) {
-            maxStretchY = currentScaleY;
-            currentScaleY = (maxStretchY + minSquishY) / 2;
-        }
-        else {
-            // The text is narrower than the container.
-            // If we're within the tolerance, then we're done!
-            if (Math.abs(differenceY - 1) <= tolerance) {
-                fallbackScaleY = null;
-                foundY = true;
-            }
-            else {
-
-                // The text is too narrow.
-                // We know that currentScale is too small, and we never need to try it again
-                // (well, we'll fall back to it if we run out of iterations before reaching our tolerance or another closer and still-too-narrow value)
-                fallbackScaleY = minSquishY = currentScaleY;
-                currentScaleY = (maxStretchY + minSquishY) / 2;
-            }
+        if (Math.abs(prevScaleBlock - currentScaleBlock) < toleranceBlock) {
+            // We've converged on a value (generally when we hit the highest/lowest possible point).
+            // Quit now, because otherwise we'll just keep repeating this value.
+            break;
         }
 
-        await applyScale(textElement, currentScaleX, currentScaleY);
+        // This doesn't happen at the end of the loop because we need to start the loop with a reflow anyway; there might be old transforms still applied.
+        await applyScale(textElement, currentScaleInline, currentScaleBlock);
         forceReflow(textElement);
         --iterationsLeft;
+
+        prevScaleBlock = currentScaleBlock;
+        let textSizeBlock = (writingDirection == "horizontal" ? textElement.scrollHeight : textElement.scrollWidth) || 0;
+        let differenceBlock = textSizeBlock / containerSizeBlock;
+        if (differenceBlock > 1) {
+            // The text is taller than the container.
+            // This is never an acceptable value to stop on, we must shrink it.
+            // Set the maximum value we're allowed to scale to to be this value,
+            // and try again with a new guess based on that..
+            maxStretchBlock = currentScaleBlock;
+            currentScaleBlock = (maxStretchBlock + minSquishBlock) / 2;
+        }
+        else {
+            // The text is shorter than the container.
+            // This might be a valid value, save it for later
+            fallbackScaleBlock = Math.max(fallbackScaleBlock || 0, currentScaleBlock);
+
+            // But back to the text being too short.
+            // We know that anything smaller than currentScale would be too small,
+            // so set that as the minimum we're allowed to guess and guess again.
+            fallbackScaleBlock = minSquishBlock = currentScaleBlock;
+            currentScaleBlock = (maxStretchBlock + minSquishBlock) / 2;
+        }
     }
 
 
-    if (iterationsLeft && onRanOutOfIterations) {
-        onRanOutOfIterations("y");
+    if (iterationsLeft <= 0 && onRanOutOfIterations) {
+        onRanOutOfIterations("block");
     }
     iterationsLeft = iterationMax;
-    while (iterationsLeft >= 0 && !foundX) {
-
-        if (seenX.has(currentScaleX)) {
-            // We're stuck in an infinite loop
-            // so we'll just cut this short right here and now.
-            // (TODO: Optimize the set checks)
-            iterationsLeft = 0;
+    while (iterationsLeft >= 0 && !foundInline) {
+        if (!isFinite(toleranceInline)) {
+            fallbackScaleInline = 1; // Infinity means "do not adjust"; bail out immediately
             break;
         }
-        seenX.add(currentScaleX);
 
+        if (Math.abs(prevScaleInline - currentScaleInline) < toleranceInline) {
+            // We've converged on a value (generally when we hit the highest/lowest possible point).
+            // Quit now, because otherwise we'll just keep repeating this value.
+            break;
+        }
 
-        let textWidth = textElement.getBoundingClientRect().width || 0;
-        let differenceX = textWidth / containerWidth;
-        if (differenceX > 1) {
-            // The text is too wide.
-            // We know that currentScale is too large, and we never need to try it again
-            maxStretchX = currentScaleX;
-            currentScaleX = (maxStretchX + minSquishX) / 2;
+        // This doesn't happen at the end of the loop because we need to start the loop with a reflow anyway; there might be old transforms still applied.
+        await applyScale(textElement, currentScaleInline, currentScaleBlock);
+        forceReflow(textElement);
+        --iterationsLeft;
+
+        prevScaleInline = currentScaleInline;
+        let clientRect = textElement.getBoundingClientRect()
+        let textSizeInline = (writingDirection == "horizontal" ? clientRect.width : clientRect.height) || 0;
+        let differenceInline = textSizeInline / containerSizeInline;
+        if (differenceInline > 1) {
+            // The text is wider than the container.
+            // This is never an acceptable value to stop on, we must shrink it.
+            // Set the maximum value we're allowed to scale to to be this value,
+            // and try again with a new guess based on that..
+            maxStretchInline = currentScaleInline;
+            currentScaleInline = (maxStretchInline + minSquishInline) / 2;
         }
         else {
             // The text is narrower than the container.
-            // If we're within the tolerance, then we're done!
-            if (Math.abs(differenceX - 1) <= tolerance) {
-                fallbackScaleX = null;
-                foundX = true;
-            }
-            else {
-                // The text is too narrow.
-                // We know that currentScale is too small, and we never need to try it again
-                // (well, we'll fall back to it if we run out of iterations before reaching our tolerance or another closer and still-too-narrow value)
-                fallbackScaleX = minSquishX = currentScaleX;
-                currentScaleX = (maxStretchX + minSquishX) / 2;
-            }
+            // This might be a valid value, save it for later
+            fallbackScaleInline = Math.max(fallbackScaleInline || 0, currentScaleInline);
+
+            // But back to the text being too narrow.
+            // We know that anything smaller than currentScale would be too small,
+            // so set that as the minimum we're allowed to guess and guess again.
+            fallbackScaleInline = minSquishInline = currentScaleInline;
+            currentScaleInline = (maxStretchInline + minSquishInline) / 2;
         }
-
-        await applyScale(textElement, currentScaleX, currentScaleY);
-        forceReflow(textElement);
-        --iterationsLeft;
     }
 
-    if (iterationsLeft && onRanOutOfIterations) {
-        onRanOutOfIterations("x");
+    if (iterationsLeft <= 0 && onRanOutOfIterations) {
+        onRanOutOfIterations("inline");
     }
 
-    if (fallbackScaleX != null || fallbackScaleY != null) {
-        await applyScale(textElement, fallbackScaleX || currentScaleX, fallbackScaleY || currentScaleY);
-        forceReflow(textElement);
-    }
+    await applyScale(textElement, fallbackScaleInline, fallbackScaleBlock);
+    forceReflow(textElement);
+
 }
 
 
 function forceReflow<E extends HTMLElement>(e: E) {
-   // return;
+    // This actually doesn't seem to be needed?
+    // It seems the times that we do our measuring properly reflow for us at the times we need,
+    // so this is redundant
+    return;
+
     // Try really hard to make sure this isn't optimized out by anything.
     // We need it for its document reflow side effect.
-    const p = (globalThis as any)._dummy;
+    /*const p = (globalThis as any)._dummy;
     (globalThis as any)._dummy = e.getBoundingClientRect();
     (globalThis as any)._dummy = e.style.opacity;
     (globalThis as any)._dummy = e.style.transform;
     (globalThis as any)._dummy = p;
-    return e;
+    return e;*/
 }

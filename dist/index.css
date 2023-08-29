@@ -9,11 +9,12 @@
   height: 100%; /* ^^^ and also because if there's no width/height, we'll often just shrink down to the size of the child we're trying to measure against, which is unhelpful */
   padding: 0em; /* Though padding and margin can make width and height 100 act weird, so adjust to each case. */
   margin: 0em;
+  contain: strict; /* Recommended both for performance reasons, and because it's usually correct -- the parent's size must not depend on the children's size for this to work. */
 }
 
 .auto-size-text-adjust {
-  transform: scaleX(calc(var(--text-adjust-scale-x, 1) * 100%));
-  font-size: calc(var(--text-adjust-scale-y, 1) * 1em);
+  transform: scaleX(calc(var(--text-adjust-scale-inline, 1) * 100%));
+  font-size: calc(var(--text-adjust-scale-block, 1) * 1em);
   padding: 0.25em; /* Padding is fine */
   margin: 0em; /* Margin is not */
 }

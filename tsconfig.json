@@ -4,7 +4,7 @@
     "module": "ESNext",                       /* Specify module code generation: 'none', 'commonjs', 'amd', 'system', 'umd', 'es2015', 'es2020', or 'ESNext'. */
     "declaration": true,                      /* Generates corresponding '.d.ts' file. */
     "declarationMap": true,                   /* Generates a sourcemap for each corresponding '.d.ts' file. */
-    "sourceMap": true,                        /* Generates corresponding '.map' file. */
+    "inlineSourceMap": true,
     "outDir": "./dist",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "exactOptionalPropertyTypes": true,    

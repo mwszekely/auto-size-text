@@ -6,18 +6,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <style>
+        :root {
+            font-size: 18px;
+        }
+
         .card {
-            width: 10vw;
-            height: 3em;
+            inline-size: 10em;
+            block-size: 4em;
             box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);
             resize: both;
             overflow: hidden;
             padding: 0.25em;
             margin: 0.25em;
         }
+        .card.nowrap {
+            block-size: 1.5em;
+        }
+
         .nowrap {
             background-color: #ccc;
             white-space: nowrap;
+        }
+
+        /*
+            Everything is centered for the demo because browsers
+            inconsistently place the little resizer thing on the left or right side
+            depending on writing-mode when it's vertical, which makes resizing
+            the elements annoying, and that's the whole purpose of the demo.
+
+            Centering things makes the experience agnostic towards what side the
+            browser puts the resize handle thing.
+        */
+        .card {
+            margin-inline-start: auto;
+            margin-inline-end: auto;
+        }
+
+        .card.vertical {
+            writing-mode: vertical-rl;
+            margin-block-start: auto;
+            margin-block-end: auto;
+            margin-inline-start: 0;
+            margin-inline-end: 0;
+        }
+        .vertical .auto-size-text-adjust {
+            transform: scaleY(calc(var(--text-adjust-scale-inline, 1) * 100%));
         }
     </style>
     <script type="module">
@@ -27,7 +60,14 @@
         document.querySelectorAll(".card").forEach(card => {
             let container = card.querySelector(".auto-size-text-container");
             let contents = card.querySelector(".auto-size-text-adjust");
-            autoResizeToFit({ textElement: contents, maxLines: card.classList.contains("multiline") ? 3 : 1 });
+            let parent = card;
+            let singleLine = parent.classList.contains("nowrap");
+            let minSquishInline = 0.25;
+            let minSquishBlock = 0.5;
+            const stretch = card.classList.contains("stretch");
+            let maxStretchInline = stretch? 5 : 1;
+            if (container && contents)
+                autoResizeToFit({ textElement: contents, maxStretchInline, minSquishInline, minSquishBlock, toleranceBlock: singleLine && !stretch? Infinity : null });
         });
     </script>
     <link href="./index.css" rel="stylesheet">
@@ -35,29 +75,35 @@
 
 <body>
     <div id="root">
+        <div class="card nowrap">Regular text, for reference</div>
         <div class="card nowrap">
             <div class="auto-size-text-container">
                 <div class="auto-size-text-adjust">This is long text that should be shrunk to fit the card.</div>
             </div>
         </div>
-        <div class="card nowrap">
+        <div class="card nowrap stretch">
             <div class="auto-size-text-container">
                 <div class="auto-size-text-adjust">Short text</div>
             </div>
         </div>
-        <div class="card nowrap">
+        <div class="card nowrap vertical">
             <div class="auto-size-text-container">
-                <div class="auto-size-text-adjust">最短</div>
-            </div>
-        </div>
-        <div class="card nowrap">
-            <div class="auto-size-text-container">
-                <div class="auto-size-text-adjust">Card</div>
+                <div class="auto-size-text-adjust">デモのための縦書</div>
             </div>
         </div>
         <div class="card">
             <div class="auto-size-text-container">
                 <div class="auto-size-text-adjust">This is a multi-line card. font-size is adjusted until its contents fit vertically, then we scale horizontally to cover any remaining problems.</div>
+            </div>
+        </div>
+        <div class="card vertical">
+            <div class="auto-size-text-container">
+                <div class="auto-size-text-adjust">
+                    いろはにほへと　ちりぬるを
+                    わかよたれそ　つねならむ
+                    うゐのおくやま　けふこえて
+                    あさきゆめみし　ゑひもせす
+                </div>
             </div>
         </div>
     </div>
