@@ -34,6 +34,8 @@
   "dependencies": {
     "@rollup/plugin-babel": "^6.0.3",
     "async-to-sync": "github:mwszekely/async-to-sync",
+    "preact-prop-helpers": "github:mwszekely/preact-prop-helpers",
+    "preact": "^10.17.1",
     "tslib": "^2.5.0",
     "typescript": "^5.0.4"
   },
